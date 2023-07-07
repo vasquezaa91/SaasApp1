@@ -1,0 +1,58 @@
+trigger:
+  branches:
+    include:
+      - master
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  solution: '**/*.sln'
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Release'
+
+stages:
+- stage: BuildTestPackage
+  displayName: 'Build, Test, and Package'
+  jobs:
+  - job: BuildTestPackageJob
+    displayName: 'Build, Test, and Package'
+    steps:
+    - task: NuGetToolInstaller@1
+
+    - task: NuGetCommand@2
+      inputs:
+        restoreSolution: '$(solution)'
+
+    - task: VSBuild@1
+      inputs:
+        solution: '$(solution)'
+        platform: '$(buildPlatform)'
+        configuration: '$(buildConfiguration)'
+
+    - task: VSTest@2
+      inputs:
+        platform: '$(buildPlatform)'
+        configuration: '$(buildConfiguration)'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish'
+      inputs:
+        command: 'publish'
+        publishWebProjects: false
+        projects: '**/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --output $(build.artifactstagingdirectory)'
+
+- stage: Deployment
+  displayName: 'Deployment'
+  jobs:
+  - job: DeployJob
+    displayName: 'Deploy to Azure Function App'
+    steps:
+    - task: AzureFunctionApp@1
+      displayName: 'Azure Function App Deploy'
+      inputs:
+        azureSubscription: 'AzureSubscription'
+        appType: 'functionApp'
+        appName: 'SaasApp1'
+        package: '$(Pipeline.Workspace)/SaasApp1.zip'
